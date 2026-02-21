@@ -20,10 +20,12 @@ import {
   Calendar,
   AlertCircle,
   Book,
-  BookOpen
+  BookOpen,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { supabase } from './lib/supabase';
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -35,12 +37,44 @@ import IdeaVault from './components/IdeaVault';
 import ContentLab from './components/ContentLab';
 import DiaryEntry from './components/DiaryEntry';
 import DiaryBrowser from './components/DiaryBrowser';
+import Auth from './components/Auth';
 
 type Tab = 'dashboard' | 'logs' | 'goals' | 'reviews' | 'regulation' | 'ideas' | 'content' | 'diary-new' | 'diary-browse';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-bg">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Auth />;
+  }
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -115,12 +149,18 @@ export default function App() {
             isSidebarOpen ? "bg-slate-50" : ""
           )}>
             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
-              JD
+              {session.user.email?.[0].toUpperCase()}
             </div>
             {isSidebarOpen && (
-              <div className="overflow-hidden">
-                <p className="text-sm font-medium text-slate-900 truncate">User Account</p>
-                <p className="text-xs text-slate-500 truncate">Future Self Mode</p>
+              <div className="overflow-hidden flex-1">
+                <p className="text-sm font-medium text-slate-900 truncate">{session.user.email}</p>
+                <button 
+                  onClick={handleLogout}
+                  className="text-xs text-rose-500 hover:text-rose-600 font-bold flex items-center gap-1 mt-0.5"
+                >
+                  <LogOut size={12} />
+                  Sign Out
+                </button>
               </div>
             )}
           </div>

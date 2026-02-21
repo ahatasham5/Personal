@@ -31,8 +31,13 @@ export default function Dashboard() {
       setStats(statsData);
 
       if (logsData.length > 0) {
+        // Filter for last 7 days for AI coaching
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const filteredLogs = logsData.filter((l: any) => new Date(l.date) >= sevenDaysAgo);
+
         const coachMsg = await gemini.getBehavioralCoaching({
-          logs: logsData.slice(0, 15),
+          logs: filteredLogs,
           stats: statsData
         });
         setCoaching(coachMsg);

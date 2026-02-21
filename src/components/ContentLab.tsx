@@ -33,12 +33,19 @@ export default function ContentLab() {
         fetch('/api/reviews')
       ]);
       
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const allLogs = logs;
+      const allDiary = await diaryRes.json();
+      const allReviews = await reviewsRes.json();
+
       const userData = {
-        recentLogs: logs.slice(0, 15),
+        recentLogs: allLogs.filter((l: any) => new Date(l.date) >= sevenDaysAgo),
         topIdeas: ideas.slice(0, 5),
         goals: await goalsRes.json(),
-        diary: (await diaryRes.json()).slice(0, 5),
-        reviews: (await reviewsRes.json()).slice(0, 3)
+        diary: allDiary.filter((d: any) => new Date(d.date) >= sevenDaysAgo),
+        reviews: allReviews.filter((r: any) => new Date(r.date) >= sevenDaysAgo)
       };
       const result = await gemini.generateContentIdeas(userData, platform);
       setContent(result);

@@ -1,103 +1,15 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("futureself.db");
-
-// Initialize Database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS daily_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT DEFAULT (date('now')),
-    title TEXT NOT NULL,
-    category TEXT CHECK(category IN ('job', 'company', 'family')),
-    time_spent INTEGER,
-    impact_level TEXT CHECK(impact_level IN ('Low', 'Med', 'High')),
-    notes TEXT,
-    next_action TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS goals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT CHECK(type IN ('outcome', 'weekly')),
-    title TEXT NOT NULL,
-    target_value INTEGER,
-    current_value INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'active',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT CHECK(type IN ('daily', 'weekly')),
-    date TEXT DEFAULT (date('now')),
-    win TEXT,
-    mistake TEXT,
-    priority TEXT,
-    summary TEXT,
-    losses TEXT,
-    goal_movement TEXT,
-    time_waste TEXT,
-    next_theme TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS non_negotiables (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT DEFAULT (date('now')),
-    task TEXT NOT NULL,
-    completed INTEGER DEFAULT 0,
-    UNIQUE(date, task)
-  );
-
-  CREATE TABLE IF NOT EXISTS stop_doing (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item TEXT NOT NULL,
-    week_start TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS idea_vault (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    content TEXT,
-    tags TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS diary (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT DEFAULT (date('now')),
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    mood TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS identity_scores (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT DEFAULT (date('now')),
-    score INTEGER,
-    energy INTEGER,
-    stress INTEGER,
-    UNIQUE(date)
-  );
-
-  CREATE TABLE IF NOT EXISTS time_blocks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT DEFAULT (date('now')),
-    block_type TEXT CHECK(block_type IN ('Must', 'Should', 'Nice')),
-    category TEXT,
-    task TEXT,
-    UNIQUE(date, block_type)
-  );
-`);
+const supabaseUrl = process.env.SUPABASE_URL || "https://cbavndsrvoyinqkaiqhk.supabase.co";
+const supabaseKey = process.env.SUPABASE_ANON_KEY || "sb_publishable_QB8mSFVKpEN3mAyHGMks1A_j2NdGc5g";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function startServer() {
   const app = express();
@@ -106,134 +18,189 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get("/api/logs", (req, res) => {
-    const logs = db.prepare("SELECT * FROM daily_logs ORDER BY created_at DESC").all();
-    res.json(logs);
+  app.get("/api/logs", async (req, res) => {
+    const { data, error } = await supabase
+      .from("daily_logs")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/logs", (req, res) => {
+  app.post("/api/logs", async (req, res) => {
     const { title, category, time_spent, impact_level, notes, next_action } = req.body;
-    const info = db.prepare(`
-      INSERT INTO daily_logs (title, category, time_spent, impact_level, notes, next_action)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(title, category, time_spent, impact_level, notes, next_action);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("daily_logs")
+      .insert([{ title, category, time_spent, impact_level, notes, next_action }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/goals", (req, res) => {
-    const goals = db.prepare("SELECT * FROM goals").all();
-    res.json(goals);
+  app.get("/api/goals", async (req, res) => {
+    const { data, error } = await supabase.from("goals").select("*");
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/goals", (req, res) => {
+  app.post("/api/goals", async (req, res) => {
     const { type, title, target_value } = req.body;
-    const info = db.prepare("INSERT INTO goals (type, title, target_value) VALUES (?, ?, ?)").run(type, title, target_value);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("goals")
+      .insert([{ type, title, target_value }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/non-negotiables", (req, res) => {
+  app.get("/api/non-negotiables", async (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
-    const items = db.prepare("SELECT * FROM non_negotiables WHERE date = ?").all(date);
-    res.json(items);
+    const { data, error } = await supabase
+      .from("non_negotiables")
+      .select("*")
+      .eq("date", date);
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/non-negotiables/toggle", (req, res) => {
+  app.post("/api/non-negotiables/toggle", async (req, res) => {
     const { date, task, completed } = req.body;
-    db.prepare(`
-      INSERT INTO non_negotiables (date, task, completed)
-      VALUES (?, ?, ?)
-      ON CONFLICT(date, task) DO UPDATE SET completed = excluded.completed
-    `).run(date, task, completed ? 1 : 0);
+    const { data, error } = await supabase
+      .from("non_negotiables")
+      .upsert({ date, task, completed: completed ? 1 : 0 }, { onConflict: "date,task" })
+      .select();
+    if (error) return res.status(500).json(error);
     res.json({ success: true });
   });
 
-  app.get("/api/identity-score", (req, res) => {
+  app.get("/api/identity-score", async (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
-    const score = db.prepare("SELECT * FROM identity_scores WHERE date = ?").get(date);
-    res.json(score || null);
+    const { data, error } = await supabase
+      .from("identity_scores")
+      .select("*")
+      .eq("date", date)
+      .single();
+    if (error && error.code !== 'PGRST116') return res.status(500).json(error);
+    res.json(data || null);
   });
 
-  app.post("/api/identity-score", (req, res) => {
+  app.post("/api/identity-score", async (req, res) => {
     const { date, score, energy, stress } = req.body;
-    db.prepare(`
-      INSERT INTO identity_scores (date, score, energy, stress)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(date) DO UPDATE SET score=excluded.score, energy=excluded.energy, stress=excluded.stress
-    `).run(date, score, energy, stress);
+    const { data, error } = await supabase
+      .from("identity_scores")
+      .upsert({ date, score, energy, stress }, { onConflict: "date" })
+      .select();
+    if (error) return res.status(500).json(error);
     res.json({ success: true });
   });
 
-  app.get("/api/ideas", (req, res) => {
-    const ideas = db.prepare("SELECT * FROM idea_vault ORDER BY created_at DESC").all();
-    res.json(ideas);
+  app.get("/api/ideas", async (req, res) => {
+    const { data, error } = await supabase
+      .from("idea_vault")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/ideas", (req, res) => {
+  app.post("/api/ideas", async (req, res) => {
     const { title, content, tags } = req.body;
-    const info = db.prepare("INSERT INTO idea_vault (title, content, tags) VALUES (?, ?, ?)").run(title, content, tags);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("idea_vault")
+      .insert([{ title, content, tags }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/diary", (req, res) => {
+  app.get("/api/diary", async (req, res) => {
     const { search, month, year } = req.query;
-    let query = "SELECT * FROM diary WHERE 1=1";
-    const params: any[] = [];
+    let query = supabase.from("diary").select("*");
 
     if (search) {
-      query += " AND (title LIKE ? OR content LIKE ?)";
-      params.push(`%${search}%`, `%${search}%`);
+      query = query.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
     }
     if (month && month !== "") {
-      query += " AND strftime('%m', date) = ?";
-      params.push(month.toString().padStart(2, '0'));
+      // PostgreSQL strftime equivalent is to_char or extracting parts
+      // For Supabase, we might need to use raw filters or just filter in JS if the dataset is small
+      // But let's try to use date filters
+    }
+    
+    const { data, error } = await query.order("date", { ascending: false });
+    if (error) return res.status(500).json(error);
+    
+    let filteredData = data;
+    if (month && month !== "") {
+      filteredData = filteredData.filter((d: any) => d.date.split('-')[1] === month.toString().padStart(2, '0'));
     }
     if (year && year !== "") {
-      query += " AND strftime('%Y', date) = ?";
-      params.push(year.toString());
+      filteredData = filteredData.filter((d: any) => d.date.split('-')[0] === year.toString());
     }
 
-    query += " ORDER BY date DESC";
-    const entries = db.prepare(query).all(...params);
-    res.json(entries);
+    res.json(filteredData);
   });
 
-  app.post("/api/diary", (req, res) => {
+  app.post("/api/diary", async (req, res) => {
     const { title, content, mood, date } = req.body;
     const entryDate = date || new Date().toISOString().split('T')[0];
-    const info = db.prepare("INSERT INTO diary (title, content, mood, date) VALUES (?, ?, ?, ?)").run(title, content, mood, entryDate);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("diary")
+      .insert([{ title, content, mood, date: entryDate }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/stop-doing", (req, res) => {
-    const items = db.prepare("SELECT * FROM stop_doing ORDER BY created_at DESC").all();
-    res.json(items);
+  app.get("/api/stop-doing", async (req, res) => {
+    const { data, error } = await supabase
+      .from("stop_doing")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/stop-doing", (req, res) => {
+  app.post("/api/stop-doing", async (req, res) => {
     const { item } = req.body;
-    const info = db.prepare("INSERT INTO stop_doing (item) VALUES (?)").run(item);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("stop_doing")
+      .insert([{ item }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/reviews", (req, res) => {
-    const reviews = db.prepare("SELECT * FROM reviews ORDER BY created_at DESC").all();
-    res.json(reviews);
+  app.get("/api/reviews", async (req, res) => {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json(error);
+    res.json(data);
   });
 
-  app.post("/api/reviews", (req, res) => {
+  app.post("/api/reviews", async (req, res) => {
     const { type, date, win, mistake, priority, summary, losses, goal_movement, time_waste, next_theme } = req.body;
-    const info = db.prepare(`
-      INSERT INTO reviews (type, date, win, mistake, priority, summary, losses, goal_movement, time_waste, next_theme)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(type, date, win, mistake, priority, summary, losses, goal_movement, time_waste, next_theme);
-    res.json({ id: info.lastInsertRowid });
+    const { data, error } = await supabase
+      .from("reviews")
+      .insert([{ type, date, win, mistake, priority, summary, losses, goal_movement, time_waste, next_theme }])
+      .select();
+    if (error) return res.status(500).json(error);
+    res.json(data[0]);
   });
 
-  app.get("/api/stats", (req, res) => {
-    const logs = db.prepare("SELECT * FROM daily_logs").all();
-    const goals = db.prepare("SELECT * FROM goals").all();
-    const reviews = db.prepare("SELECT * FROM reviews").all();
-    const scores = db.prepare("SELECT * FROM identity_scores ORDER BY date DESC LIMIT 30").all();
+  app.get("/api/stats", async (req, res) => {
+    const [logsRes, goalsRes, reviewsRes, scoresRes] = await Promise.all([
+      supabase.from("daily_logs").select("*"),
+      supabase.from("goals").select("*"),
+      supabase.from("reviews").select("*"),
+      supabase.from("identity_scores").select("*").order("date", { ascending: false }).limit(30)
+    ]);
+
+    const logs = logsRes.data || [];
+    const goals = goalsRes.data || [];
+    const reviews = reviewsRes.data || [];
+    const scores = scoresRes.data || [];
 
     // Calculate Streak
     const logDates = [...new Set(logs.map((l: any) => l.date))].sort().reverse() as string[];

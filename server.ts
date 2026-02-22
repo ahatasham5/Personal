@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -21,7 +20,8 @@ app.get("/api/health", (req, res) => {
     message: "Server is running",
     supabaseUrl: supabaseUrl.substring(0, 15) + "...", 
     hasKey: !!supabaseKey,
-    env: process.env.NODE_ENV
+    env: process.env.NODE_ENV,
+    isVercel: !!process.env.VERCEL
   });
 });
 
@@ -291,24 +291,36 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-async function startServer() {
-  const PORT = 3000;
+// Setup static serving or Vite middleware
+async function setupApp() {
+  if (process.env.VERCEL) {
+    // On Vercel, we don't need to serve static files or Vite middleware
+    // as vercel.json handles rewrites and static serving.
+    return;
+  }
+
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    // In production (non-Vercel), serve static files from dist
+    const distPath = path.join(__dirname, "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res, next) => {
       if (req.path.startsWith('/api')) return next();
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  }
+
+  const PORT = 3000;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 }
 
-startServer();
+setupApp().catch(err => {
+  console.error("Failed to setup app:", err);
+});
+
 export default app;

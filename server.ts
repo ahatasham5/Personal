@@ -7,8 +7,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://cbavndsrvoyinqkaiqhk.supabase.co";
-const supabaseKey = process.env.SUPABASE_ANON_KEY || "sb_publishable_QB8mSFVKpEN3mAyHGMks1A_j2NdGc5g";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://cbavndsrvoyinqkaiqhk.supabase.co";
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_QB8mSFVKpEN3mAyHGMks1A_j2NdGc5g";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
@@ -20,7 +20,10 @@ app.get("/api/logs", async (req, res) => {
     .from("daily_logs")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (logs):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -30,13 +33,19 @@ app.post("/api/logs", async (req, res) => {
     .from("daily_logs")
     .insert([{ title, category, time_spent, impact_level, notes, next_action }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post logs):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 
 app.get("/api/goals", async (req, res) => {
   const { data, error } = await supabase.from("goals").select("*");
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (goals):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -46,7 +55,10 @@ app.post("/api/goals", async (req, res) => {
     .from("goals")
     .insert([{ type, title, target_value }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post goals):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 
@@ -56,7 +68,10 @@ app.get("/api/non-negotiables", async (req, res) => {
     .from("non_negotiables")
     .select("*")
     .eq("date", date);
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (nn):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -66,7 +81,10 @@ app.post("/api/non-negotiables/toggle", async (req, res) => {
     .from("non_negotiables")
     .upsert({ date, task, completed: completed ? 1 : 0 }, { onConflict: "date,task" })
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (toggle nn):", error);
+    return res.status(500).json(error);
+  }
   res.json({ success: true });
 });
 
@@ -77,7 +95,10 @@ app.get("/api/identity-score", async (req, res) => {
     .select("*")
     .eq("date", date)
     .single();
-  if (error && error.code !== 'PGRST116') return res.status(500).json(error);
+  if (error && error.code !== 'PGRST116') {
+    console.error("Supabase Error (identity):", error);
+    return res.status(500).json(error);
+  }
   res.json(data || null);
 });
 
@@ -87,7 +108,10 @@ app.post("/api/identity-score", async (req, res) => {
     .from("identity_scores")
     .upsert({ date, score, energy, stress }, { onConflict: "date" })
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post identity):", error);
+    return res.status(500).json(error);
+  }
   res.json({ success: true });
 });
 
@@ -96,7 +120,10 @@ app.get("/api/ideas", async (req, res) => {
     .from("idea_vault")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (ideas):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -106,7 +133,10 @@ app.post("/api/ideas", async (req, res) => {
     .from("idea_vault")
     .insert([{ title, content, tags }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post ideas):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 
@@ -119,7 +149,10 @@ app.get("/api/diary", async (req, res) => {
   }
   
   const { data, error } = await query.order("date", { ascending: false });
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (diary):", error);
+    return res.status(500).json(error);
+  }
   
   let filteredData = data;
   if (month && month !== "") {
@@ -139,7 +172,10 @@ app.post("/api/diary", async (req, res) => {
     .from("diary")
     .insert([{ title, content, mood, date: entryDate }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post diary):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 
@@ -148,7 +184,10 @@ app.get("/api/stop-doing", async (req, res) => {
     .from("stop_doing")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (stop-doing):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -158,7 +197,10 @@ app.post("/api/stop-doing", async (req, res) => {
     .from("stop_doing")
     .insert([{ item }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post stop-doing):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 
@@ -167,7 +209,10 @@ app.get("/api/reviews", async (req, res) => {
     .from("reviews")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (reviews):", error);
+    return res.status(500).json(error);
+  }
   res.json(data);
 });
 
@@ -177,7 +222,10 @@ app.post("/api/reviews", async (req, res) => {
     .from("reviews")
     .insert([{ type, date, win, mistake, priority, summary, losses, goal_movement, time_waste, next_theme }])
     .select();
-  if (error) return res.status(500).json(error);
+  if (error) {
+    console.error("Supabase Error (post reviews):", error);
+    return res.status(500).json(error);
+  }
   res.json(data[0]);
 });
 

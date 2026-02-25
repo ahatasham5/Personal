@@ -33,25 +33,42 @@ export const gemini = {
     return response.text;
   },
 
-  async generateContentIdeas(userData: any, platform: string) {
+  async generateContentIdeas(userData: any, platform: string, userThoughts?: string) {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-lite-latest",
       contents: `User context (LAST 7 DAYS ONLY):
       - Recent Logs (Work/Family/Company): ${JSON.stringify(userData.recentLogs)}
       - Long-term Goals: ${JSON.stringify(userData.goals)}
       - Recent Diary Entries: ${JSON.stringify(userData.diary)}
       - Recent Reviews (Wins/Losses): ${JSON.stringify(userData.reviews)}
       - Top Ideas: ${JSON.stringify(userData.topIdeas)}
+      ${userThoughts ? `- User's specific thoughts/seeds for this content: ${userThoughts}` : ''}
 
-      Generate 3 viral content ideas for ${platform}. 
-      The ideas MUST be influenced by their specific goals, projects, and daily reflections from the last 7 days.
+      Generate 3 ready-to-upload, high-authority content pieces for ${platform}. 
+      Each piece must include a compelling idea, a platform-specific hook, a full caption, and a descriptive image prompt.
+      
+      The content MUST be deeply influenced by their specific goals, projects, and daily reflections from the last 7 days.
       Incorporate modern current trends in IT and AI.
       Use Google Search to ensure trends are up-to-the-minute.
       Make the content sound authentic to someone building their future self.`,
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              idea: { type: Type.STRING, description: "The core concept or title of the post" },
+              hook: { type: Type.STRING, description: "A platform-specific attention-grabbing opening line" },
+              caption: { type: Type.STRING, description: "The full body text of the post, formatted for the platform" },
+              imagePrompt: { type: Type.STRING, description: "A detailed prompt for an AI image generator to accompany the post" }
+            },
+            required: ["idea", "hook", "caption", "imagePrompt"]
+          }
+        }
       }
     });
-    return response.text;
+    return JSON.parse(response.text || "[]");
   }
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Linkedin, Youtube, Instagram, Globe, Video, Send, Loader2 } from 'lucide-react';
+import { Sparkles, Linkedin, Youtube, Instagram, Globe, Video, Send, Loader2, Facebook, Copy, Check, Image as ImageIcon, Quote } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { gemini } from '../services/gemini';
 import Markdown from 'react-markdown';
@@ -8,8 +8,10 @@ export default function ContentLab() {
   const [logs, setLogs] = useState<any[]>([]);
   const [ideas, setIdeas] = useState<any[]>([]);
   const [platform, setPlatform] = useState('LinkedIn');
-  const [content, setContent] = useState('');
+  const [userThoughts, setUserThoughts] = useState('');
+  const [generatedContent, setGeneratedContent] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -47,8 +49,8 @@ export default function ContentLab() {
         diary: allDiary.filter((d: any) => new Date(d.date) >= sevenDaysAgo),
         reviews: allReviews.filter((r: any) => new Date(r.date) >= sevenDaysAgo)
       };
-      const result = await gemini.generateContentIdeas(userData, platform);
-      setContent(result);
+      const result = await gemini.generateContentIdeas(userData, platform, userThoughts);
+      setGeneratedContent(result);
     } catch (err) {
       console.error(err);
     } finally {
@@ -56,8 +58,15 @@ export default function ContentLab() {
     }
   };
 
+  const copyToClipboard = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   const platforms = [
     { name: 'LinkedIn', icon: Linkedin, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { name: 'Facebook', icon: Facebook, color: 'text-blue-700', bg: 'bg-blue-100' },
     { name: 'YouTube', icon: Youtube, color: 'text-rose-600', bg: 'bg-rose-50' },
     { name: 'Instagram', icon: Instagram, color: 'text-pink-600', bg: 'bg-pink-50' },
     { name: 'TikTok', icon: Video, color: 'text-slate-900', bg: 'bg-slate-100' },
@@ -93,6 +102,16 @@ export default function ContentLab() {
               </button>
             ))}
           </div>
+
+          <div className="space-y-2 pt-4">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Optional Thoughts</h4>
+            <textarea
+              value={userThoughts}
+              onChange={(e) => setUserThoughts(e.target.value)}
+              placeholder="Any specific topic or seed for this content?"
+              className="w-full p-4 rounded-2xl border border-border bg-white/50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm min-h-[120px] resize-none"
+            />
+          </div>
           
           <button 
             onClick={generateIdeas}
@@ -118,10 +137,45 @@ export default function ContentLab() {
               </div>
             </div>
             
-            <div className="flex-1 p-8">
-              {content ? (
-                <div className="prose prose-slate max-w-none">
-                  <Markdown>{content}</Markdown>
+            <div className="flex-1 p-8 overflow-y-auto max-h-[700px]">
+              {generatedContent.length > 0 ? (
+                <div className="space-y-8">
+                  {generatedContent.map((item, idx) => (
+                    <div key={idx} className="bg-slate-50 rounded-3xl p-6 border border-slate-200 space-y-6 relative group">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <h5 className="text-lg font-bold text-slate-900">{item.idea}</h5>
+                          <div className="flex items-center gap-2 text-indigo-600">
+                            <Quote size={14} />
+                            <span className="text-sm font-medium italic">{item.hook}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(item.caption, idx)}
+                          className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-indigo-600"
+                          title="Copy Caption"
+                        >
+                          {copiedIndex === idx ? <Check size={18} /> : <Copy size={18} />}
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="bg-white rounded-2xl p-4 border border-slate-100 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {item.caption}
+                        </div>
+
+                        <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100 space-y-2">
+                          <div className="flex items-center gap-2 text-indigo-700">
+                            <ImageIcon size={14} />
+                            <span className="text-xs font-bold uppercase tracking-wider">Image Prompt</span>
+                          </div>
+                          <p className="text-sm text-indigo-900/70 italic">
+                            {item.imagePrompt}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
